@@ -3,17 +3,11 @@ import datetime
 from dateutil.relativedelta import relativedelta
 import holidays
 from fpdf import FPDF
-import streamlit as st
-import datetime
-from dateutil.relativedelta import relativedelta
-import holidays
-from fpdf import FPDF
-from supabase import create_client, Client # NUEVA LIBRERÍA
+from supabase import create_client, Client
 
 # ==========================================
 # 0. CONEXIÓN A LA BASE DE DATOS (SUPABASE)
 # ==========================================
-# st.cache_resource hace que la conexión se mantenga abierta y rápida
 @st.cache_resource
 def iniciar_conexion():
     url = st.secrets["SUPABASE_URL"]
@@ -21,54 +15,6 @@ def iniciar_conexion():
     return create_client(url, key)
 
 supabase = iniciar_conexion()
-
-# (AQUÍ DEBES DEJAR TODO TU MOTOR DE CÁLCULO Y FUNCIONES DE PDF/FESTIVOS IGUAL)
-# ...
-
-# ...
-
-# --- PESTAÑA 3: GESTOR DE CASOS CON BASE DE DATOS ---
-with tab3:
-    st.markdown("### 🗄️ Archivo Digital de Expedientes")
-    st.info("Guarda los resultados directamente en la base de datos cifrada de Terralegal.")
-    
-    # Creamos un formulario para agrupar los datos antes de enviarlos
-    with st.form("formulario_nuevo_caso", clear_on_submit=True):
-        col_form1, col_form2 = st.columns(2)
-        
-        with col_form1:
-            radicado_input = st.text_input("Número de Radicado (21 dígitos)")
-            delito_input = st.text_input("Delito Investigado")
-            
-        with col_form2:
-            actuacion_input = st.text_input("Actuación Procesal Pendiente")
-            fecha_venc_input = st.date_input("Fecha de Vencimiento Estimada")
-            # Simulamos el correo del abogado logueado (luego lo haremos dinámico con Login)
-            abogado_email = st.text_input("Correo del Abogado a Cargo", value="camilo@terralegal.com") 
-            
-        boton_guardar = st.form_submit_button("💾 Guardar Caso en la Nube")
-        
-        # LÓGICA AL PRESIONAR EL BOTÓN
-        if boton_guardar:
-            if radicado_input and delito_input:
-                try:
-                    # Empaquetamos los datos como nos los pide Supabase
-                    datos_caso = {
-                        "usuario_email": abogado_email,
-                        "radicado": radicado_input,
-                        "delito": delito_input,
-                        "actuacion_pendiente": actuacion_input,
-                        "fecha_vencimiento": fecha_venc_input.isoformat()
-                    }
-                    
-                    # Ejecutamos el envío a la tabla 'casos_penales'
-                    respuesta = supabase.table("casos_penales").insert(datos_caso).execute()
-                    
-                    st.success(f"¡Caso {radicado_input} guardado exitosamente en la base de datos!")
-                except Exception as e:
-                    st.error(f"Hubo un error al guardar: {e}")
-            else:
-                st.warning("⚠️ Debes llenar al menos el radicado y el delito.")
 
 # ==========================================
 # 1. MOTOR DE CÁLCULO (DÍAS HÁBILES)
@@ -172,7 +118,7 @@ ocultar_elementos_streamlit = """
             /* Ajuste de márgenes para que se vea más centrado y elegante */
             .block-container {
                 padding-top: 2rem;
-                padding-bottom: 0rem;
+                padding-bottom: 8rem;
             }
             </style>
             """
@@ -184,7 +130,7 @@ st.title("Gestor Procesal Automático")
 st.markdown("Plataforma avanzada para el control de términos y prescripción de la acción penal.")
 st.divider()
 
-# 2. ÚNICA CREACIÓN DE PESTAÑAS (Aquí conectamos los 3 módulos)
+# 2. ÚNICA CREACIÓN DE PESTAÑAS
 tab1, tab2, tab3 = st.tabs([
     "📅 Cómputo de Términos (Ley 906/1826)", 
     "⏳ Cálculo de Prescripción (Ley 599)", 
@@ -192,7 +138,6 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # --- PESTAÑA 1: CÓMPUTO DE TÉRMINOS ---
-
 with tab1:
     regimen = st.radio("📜 Seleccione el Régimen Procesal:", 
                        ["Procedimiento Ordinario (Ley 906)", "Procedimiento Abreviado (Ley 1826)"], 
@@ -249,43 +194,34 @@ with tab2:
     st.markdown("### Algoritmo de Prescripción de la Acción Penal")
     st.info("💡 Este módulo calcula los tiempos de caducidad aplicando las reglas de los artículos 83 y 86 del Código Penal.")
     
-    # 1. CATÁLOGO COMPLETO DE DELITOS (Pena Máxima en meses - Ley 599/2000 y modif.)
     catalogo_delitos = {
-        # --- VIDA E INTEGRIDAD PERSONAL ---
         "Homicidio simple (Art. 103)": 450,
         "Homicidio agravado (Art. 104)": 600,
         "Feminicidio simple (Art. 104A)": 500,
         "Feminicidio agravado (Art. 104B)": 600,
         "Lesiones personales (Ej. Incapacidad > 90 días)": 120,
-        # --- LIBERTAD Y FORMACIÓN SEXUAL ---
         "Acceso carnal violento (Art. 205)": 360,
         "Actos sexuales con menor de 14 años (Art. 209)": 156,
-        # --- PATRIMONIO ECONÓMICO ---
         "Hurto simple (Art. 239)": 108,
         "Hurto calificado (Art. 240)": 168,
         "Hurto agravado (Art. 241)": 180,
         "Estafa (Art. 246)": 144,
         "Abuso de confianza (Art. 249)": 54,
         "Extorsión (Art. 244)": 288,
-        # --- FAMILIA ---
         "Violencia intrafamiliar (Art. 229)": 96,
         "Inasistencia alimentaria (Art. 233)": 54,
-        # --- FE PÚBLICA ---
         "Falsedad ideológica en doc. público (Art. 286)": 144,
         "Falsedad material en doc. público (Art. 287)": 108,
         "Falsedad en documento privado (Art. 289)": 108,
-        # --- SEGURIDAD PÚBLICA ---
         "Concierto para delinquir simple (Art. 340)": 108,
         "Concierto para delinquir agravado (Art. 340 inc. 2)": 216,
         "Porte ilegal de armas de fuego (Art. 365)": 144,
         "Tráfico, fab. o porte de estupefacientes (Art. 376)": 360,
-        # --- ADMINISTRACIÓN PÚBLICA ---
         "Peculado por apropiación (Art. 397)": 270,
         "Concusión (Art. 404)": 180,
         "Cohecho propio (Art. 405)": 180,
         "Celebración indebida de contratos (Art. 410)": 216,
         "Prevaricato por acción (Art. 413)": 144,
-        # --- OTROS ---
         "Lavado de activos (Art. 323)": 360,
         "Secuestro extorsivo (Art. 169)": 504,
         "OTRO (Ingreso manual / Concurso de delitos)": 0
@@ -294,7 +230,6 @@ with tab2:
     c_p1, c_p2 = st.columns(2)
     with c_p1:
         fecha_hechos = st.date_input("📅 Fecha de consumación de los hechos", datetime.date.today())
-        
         delito_seleccionado = st.selectbox("⚖️ Seleccione el Delito", list(catalogo_delitos.keys()))
         
         if delito_seleccionado == "OTRO (Ingreso manual / Concurso de delitos)":
@@ -312,12 +247,11 @@ with tab2:
         es_servidor_publico = st.checkbox("El sujeto activo es Servidor Público (Aumenta el término prescriptivo)")
         
     if st.button("Ejecutar Algoritmo de Prescripción", type="primary", key="btn_presc"):
-        # 1. Regla General (Art. 83)
         pena_anios = pena_max_meses / 12.0
         termino_base_anios = max(5.0, min(20.0, pena_anios))
         
         if es_servidor_publico:
-            termino_base_anios = termino_base_anios * 1.5 # Aumento general promedio
+            termino_base_anios = termino_base_anios * 1.5 
             
         anios_base = int(termino_base_anios)
         meses_base = int(round((termino_base_anios - anios_base) * 12))
@@ -329,7 +263,6 @@ with tab2:
             st.write(f"**Término aplicable (Art. 83 CP):** {termino_base_anios:.2f} años.")
             st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_inicial.strftime('%d/%m/%Y'))
         else:
-            # 2. Interrupción por Imputación (Art. 86)
             termino_interrumpido_anios = termino_base_anios / 2.0
             termino_final_anios = max(3.0, min(10.0, termino_interrumpido_anios))
             
@@ -341,3 +274,41 @@ with tab2:
             st.error("🛑 **Fase de Investigación/Juicio:** Término interrumpido por imputación.")
             st.write(f"**Nuevo término reducido (Art. 86 CP):** {termino_final_anios:.2f} años (Contados desde la imputación).")
             st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_final.strftime('%d/%m/%Y'))
+
+# --- PESTAÑA 3: GESTOR DE CASOS CON BASE DE DATOS ---
+with tab3:
+    st.markdown("### 🗄️ Archivo Digital de Expedientes")
+    st.info("Guarda los resultados directamente en la base de datos cifrada de Terralegal.")
+    
+    with st.form("formulario_nuevo_caso", clear_on_submit=True):
+        col_form1, col_form2 = st.columns(2)
+        
+        with col_form1:
+            radicado_input = st.text_input("Número de Radicado (21 dígitos)")
+            delito_input = st.text_input("Delito Investigado")
+            
+        with col_form2:
+            actuacion_input = st.text_input("Actuación Procesal Pendiente")
+            fecha_venc_input = st.date_input("Fecha de Vencimiento Estimada")
+            abogado_email = st.text_input("Correo del Abogado a Cargo", value="camilo@terralegal.com") 
+            
+        boton_guardar = st.form_submit_button("💾 Guardar Caso en la Nube")
+        
+        if boton_guardar:
+            if radicado_input and delito_input:
+                try:
+                    datos_caso = {
+                        "usuario_email": abogado_email,
+                        "radicado": radicado_input,
+                        "delito": delito_input,
+                        "actuacion_pendiente": actuacion_input,
+                        "fecha_vencimiento": fecha_venc_input.isoformat()
+                    }
+                    
+                    respuesta = supabase.table("casos_penales").insert(datos_caso).execute()
+                    
+                    st.success(f"¡Caso {radicado_input} guardado exitosamente en la base de datos!")
+                except Exception as e:
+                    st.error(f"Hubo un error al guardar: {e}")
+            else:
+                st.warning("⚠️ Debes llenar al menos el radicado y el delito.")
