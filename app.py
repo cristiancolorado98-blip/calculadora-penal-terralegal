@@ -17,16 +17,23 @@ def iniciar_conexion():
 supabase = iniciar_conexion()
 
 # ==========================================
-# 1. MOTOR DE CÁLCULO (DÍAS HÁBILES)
+# 1. MOTOR DE CÁLCULO Y FECHAS
 # ==========================================
+@st.cache_data
+def obtener_festivos(anio):
+    """Guarda los festivos en memoria para no recalcularlos y evitar que la app se ponga lenta"""
+    return holidays.CO(years=anio)
+
 def es_vacancia_judicial(fecha):
     if (fecha.month == 12 and fecha.day >= 20) or (fecha.month == 1 and fecha.day <= 10):
         return True
     return False
 
 def es_dia_habil(fecha):
-    festivos_colombia = holidays.CO(years=fecha.year)
-    if fecha.weekday() >= 5 or fecha in festivos_colombia or es_vacancia_judicial(fecha):
+    if fecha.weekday() >= 5 or es_vacancia_judicial(fecha):
+        return False
+    festivos_colombia = obtener_festivos(fecha.year)
+    if fecha in festivos_colombia:
         return False
     return True
 
@@ -41,6 +48,37 @@ def calcular_vencimiento(fecha_inicio, dias_plazo, tipo_conteo="habil"):
         elif tipo_conteo == "calendario":
             dias_transcurridos += 1
     return fecha_actual
+
+# NUEVO: Traductor de fechas a español
+def formatear_fecha_es(fecha):
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    return f"{dias[fecha.weekday()]}, {fecha.day} de {meses[fecha.month - 1]} de {fecha.year}"
+
+# NUEVO: Calculadora de días hábiles restantes (Para el semáforo)
+def calcular_dias_habiles_restantes(fecha_vencimiento):
+    hoy = datetime.date.today()
+    if fecha_vencimiento < hoy:
+        return -1 # Ya venció
+    dias = 0
+    fecha_actual = hoy
+    while fecha_actual < fecha_vencimiento:
+        fecha_actual += datetime.timedelta(days=1)
+        if es_dia_habil(fecha_actual):
+            dias += 1
+    return dias
+
+# NUEVO: Función visual del semáforo para la plataforma
+def mostrar_semaforo(fecha_vencimiento):
+    dias = calcular_dias_habiles_restantes(fecha_vencimiento)
+    if dias < 0:
+        st.error(f"🚨 **¡TÉRMINO VENCIDO!** La fecha límite ya pasó.")
+    elif dias <= 10:
+        st.error(f"🔴 **SEMÁFORO ROJO:** Urgente, quedan solo **{dias} días hábiles**.")
+    elif dias <= 30:
+        st.warning(f"🟡 **SEMÁFORO AMARILLO:** Atención, quedan **{dias} días hábiles**.")
+    else:
+        st.success(f"🟢 **SEMÁFORO VERDE:** Aún quedan **{dias} días hábiles**.")
 
 # ==========================================
 # 2. EXPORTACIÓN (PDF y CALENDARIO)
@@ -57,23 +95,46 @@ def generar_pdf(tramite, base_legal, dias, tipo_conteo, fecha_notif, fecha_venc,
     pdf.cell(0, 10, "REPORTE DE VENCIMIENTO DE TERMINOS", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font("helvetica", "I", 10)
     pdf.cell(0, 10, "Generado por Terralegal S.A.S.", new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(10)
+    pdf.ln(5)
+    
+    hoy = datetime.date.today()
+    dias_restantes = calcular_dias_habiles_restantes(fecha_venc)
+    
     pdf.set_font("helvetica", "", 12)
+    # Agregamos la fecha de consulta
+    pdf.cell(0, 8, f"Fecha de consulta: {formatear_fecha_es(hoy)}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Actuacion Procesal: {tramite.encode('latin-1', 'replace').decode('latin-1')}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Fundamento Juridico: {base_legal}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 8, f"Fecha del Acto/Notificacion: {fecha_notif.strftime('%d/%m/%Y')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Fecha del Acto/Notificacion: {formatear_fecha_es(fecha_notif)}", new_x="LMARGIN", new_y="NEXT")
     
+    pdf.ln(5)
     if rango:
         pdf.cell(0, 8, f"Termino Legal: Entre {dias} y {tipo_conteo}", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(5)
         pdf.set_font("helvetica", "B", 14)
-        pdf.cell(0, 10, f"VENCIMIENTO MINIMO: {fecha_venc.strftime('%d/%m/%Y')}", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 10, f"VENCIMIENTO MAXIMO: {fecha_max.strftime('%d/%m/%Y')}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 10, f"VENCIMIENTO MINIMO: {formatear_fecha_es(fecha_venc)}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 10, f"VENCIMIENTO MAXIMO: {formatear_fecha_es(fecha_max)}", new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.cell(0, 8, f"Termino Legal: {dias} dias {tipo_conteo}s", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(5)
         pdf.set_font("helvetica", "B", 14)
-        pdf.cell(0, 10, f"FECHA EXACTA DE VENCIMIENTO: {fecha_venc.strftime('%d/%m/%Y')}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 10, f"FECHA EXACTA: {formatear_fecha_es(fecha_venc)}", new_x="LMARGIN", new_y="NEXT")
+
+    # SEMAFORO EN PDF CON COLORES
+    pdf.ln(5)
+    pdf.set_font("helvetica", "B", 12)
+    if dias_restantes < 0:
+        pdf.set_text_color(255, 0, 0) # Rojo
+        pdf.cell(0, 10, "ESTADO: TERMINO VENCIDO", new_x="LMARGIN", new_y="NEXT")
+    elif dias_restantes <= 10:
+        pdf.set_text_color(255, 0, 0) # Rojo
+        pdf.cell(0, 10, f"SEMAFORO ROJO: Urgente, quedan {dias_restantes} dias habiles", new_x="LMARGIN", new_y="NEXT")
+    elif dias_restantes <= 30:
+        pdf.set_text_color(255, 140, 0) # Naranja oscuro
+        pdf.cell(0, 10, f"SEMAFORO AMARILLO: Quedan {dias_restantes} dias habiles", new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.set_text_color(0, 128, 0) # Verde
+        pdf.cell(0, 10, f"SEMAFORO VERDE: Quedan {dias_restantes} dias habiles", new_x="LMARGIN", new_y="NEXT")
+        
+    pdf.set_text_color(0, 0, 0) # Restaurar color negro
     return bytes(pdf.output())
 
 # ==========================================
@@ -109,13 +170,11 @@ terminos_abreviados = {
 # ==========================================
 st.set_page_config(page_title="Plataforma LegalTech - Terralegal", page_icon="logo.png", layout="wide")
 
-# 1.5 INYECCIÓN DE CSS (DISEÑO PREMIUM)
 ocultar_elementos_streamlit = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
-            /* Ajuste de márgenes para que se vea más centrado y elegante */
             .block-container {
                 padding-top: 2rem;
                 padding-bottom: 8rem;
@@ -124,13 +183,11 @@ ocultar_elementos_streamlit = """
             """
 st.markdown(ocultar_elementos_streamlit, unsafe_allow_html=True)
 
-# 1. ENCABEZADO UNIFICADO Y LIMPIO
 st.image("logo.png", width=300) 
 st.title("Gestor Procesal Automático")
 st.markdown("Plataforma avanzada para el control de términos y prescripción de la acción penal.")
 st.divider()
 
-# 2. ÚNICA CREACIÓN DE PESTAÑAS
 tab1, tab2, tab3 = st.tabs([
     "📅 Cómputo de Términos (Ley 906/1826)", 
     "⏳ Cálculo de Prescripción (Ley 599)", 
@@ -160,8 +217,9 @@ with tab1:
             fecha_vencimiento = calcular_vencimiento(fecha_notificacion, dias_calc, tramite["tipo_conteo"])
             
             st.success("Cálculo realizado con éxito")
-            st.metric(label="Fecha Exacta de Vencimiento", value=fecha_vencimiento.strftime('%d/%m/%Y'))
+            st.metric(label="Fecha Exacta de Vencimiento", value=formatear_fecha_es(fecha_vencimiento))
             st.write(f"**Término Aplicado:** {dias_calc} días {tramite['tipo_conteo']}s. | **Base Legal:** {tramite['base_legal']}")
+            mostrar_semaforo(fecha_vencimiento)
             
             b_col1, b_col2 = st.columns(2)
             with b_col1:
@@ -177,8 +235,9 @@ with tab1:
             
             st.success("Cálculo de rango realizado con éxito")
             c1, c2 = st.columns(2)
-            c1.metric(label="Vencimiento Mínimo", value=fecha_min.strftime('%d/%m/%Y'))
-            c2.metric(label="Vencimiento Máximo", value=fecha_max.strftime('%d/%m/%Y'))
+            c1.metric(label="Vencimiento Mínimo", value=formatear_fecha_es(fecha_min))
+            c2.metric(label="Vencimiento Máximo", value=formatear_fecha_es(fecha_max))
+            mostrar_semaforo(fecha_min)
             
             b_col1, b_col2 = st.columns(2)
             with b_col1:
@@ -261,7 +320,8 @@ with tab2:
         if not hubo_imputacion:
             st.warning("⚠️ **Fase de Indagación:** El término no ha sido interrumpido.")
             st.write(f"**Término aplicable (Art. 83 CP):** {termino_base_anios:.2f} años.")
-            st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_inicial.strftime('%d/%m/%Y'))
+            st.metric(label="Fecha Exacta de Prescripción", value=formatear_fecha_es(fecha_presc_inicial))
+            mostrar_semaforo(fecha_presc_inicial)
         else:
             termino_interrumpido_anios = termino_base_anios / 2.0
             termino_final_anios = max(3.0, min(10.0, termino_interrumpido_anios))
@@ -273,7 +333,8 @@ with tab2:
             
             st.error("🛑 **Fase de Investigación/Juicio:** Término interrumpido por imputación.")
             st.write(f"**Nuevo término reducido (Art. 86 CP):** {termino_final_anios:.2f} años (Contados desde la imputación).")
-            st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_final.strftime('%d/%m/%Y'))
+            st.metric(label="Fecha Exacta de Prescripción", value=formatear_fecha_es(fecha_presc_final))
+            mostrar_semaforo(fecha_presc_final)
 
 # --- PESTAÑA 3: GESTOR DE CASOS CON BASE DE DATOS ---
 with tab3:
