@@ -3,6 +3,84 @@ import datetime
 from dateutil.relativedelta import relativedelta
 import holidays
 from fpdf import FPDF
+import streamlit as st
+import datetime
+from dateutil.relativedelta import relativedelta
+import holidays
+from fpdf import FPDF
+from supabase import create_client, Client # NUEVA LIBRERÍA
+
+# ==========================================
+# 0. CONEXIÓN A LA BASE DE DATOS (SUPABASE)
+# ==========================================
+# st.cache_resource hace que la conexión se mantenga abierta y rápida
+@st.cache_resource
+def iniciar_conexion():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = iniciar_conexion()
+
+# (AQUÍ DEBES DEJAR TODO TU MOTOR DE CÁLCULO Y FUNCIONES DE PDF/FESTIVOS IGUAL)
+# ...
+
+# ==========================================
+# 4. INTERFAZ GRÁFICA (FRONTEND COMPLETO)
+# ==========================================
+st.set_page_config(page_title="Plataforma LegalTech - Terralegal", page_icon="⚖️", layout="wide")
+
+st.title("⚖️ Terralegal S.A.S - Gestor Procesal Automático")
+st.divider()
+
+# AHORA TENEMOS 3 PESTAÑAS
+tab1, tab2, tab3 = st.tabs(["📅 Cómputo", "⏳ Prescripción", "📂 GESTOR DE CASOS (NUEVO)"])
+
+# (AQUÍ DEJAS EL CONTENIDO DE TAB1 y TAB2 EXACTAMENTE IGUAL)
+# ...
+
+# --- PESTAÑA 3: GESTOR DE CASOS CON BASE DE DATOS ---
+with tab3:
+    st.markdown("### 🗄️ Archivo Digital de Expedientes")
+    st.info("Guarda los resultados directamente en la base de datos cifrada de Terralegal.")
+    
+    # Creamos un formulario para agrupar los datos antes de enviarlos
+    with st.form("formulario_nuevo_caso", clear_on_submit=True):
+        col_form1, col_form2 = st.columns(2)
+        
+        with col_form1:
+            radicado_input = st.text_input("Número de Radicado (21 dígitos)")
+            delito_input = st.text_input("Delito Investigado")
+            
+        with col_form2:
+            actuacion_input = st.text_input("Actuación Procesal Pendiente")
+            fecha_venc_input = st.date_input("Fecha de Vencimiento Estimada")
+            # Simulamos el correo del abogado logueado (luego lo haremos dinámico con Login)
+            abogado_email = st.text_input("Correo del Abogado a Cargo", value="camilo@terralegal.com") 
+            
+        boton_guardar = st.form_submit_button("💾 Guardar Caso en la Nube")
+        
+        # LÓGICA AL PRESIONAR EL BOTÓN
+        if boton_guardar:
+            if radicado_input and delito_input:
+                try:
+                    # Empaquetamos los datos como nos los pide Supabase
+                    datos_caso = {
+                        "usuario_email": abogado_email,
+                        "radicado": radicado_input,
+                        "delito": delito_input,
+                        "actuacion_pendiente": actuacion_input,
+                        "fecha_vencimiento": fecha_venc_input.isoformat()
+                    }
+                    
+                    # Ejecutamos el envío a la tabla 'casos_penales'
+                    respuesta = supabase.table("casos_penales").insert(datos_caso).execute()
+                    
+                    st.success(f"¡Caso {radicado_input} guardado exitosamente en la base de datos!")
+                except Exception as e:
+                    st.error(f"Hubo un error al guardar: {e}")
+            else:
+                st.warning("⚠️ Debes llenar al menos el radicado y el delito.")
 
 # ==========================================
 # 1. MOTOR DE CÁLCULO (DÍAS HÁBILES)
