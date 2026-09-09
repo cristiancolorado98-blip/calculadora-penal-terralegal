@@ -239,52 +239,7 @@ with tab2:
     st.markdown("### Algoritmo de Prescripción de la Acción Penal")
     st.info("💡 Este módulo calcula los tiempos de caducidad aplicando las reglas de los artículos 83 y 86 del Código Penal.")
     
-    c_p1, c_p2 = st.columns(2)
-    with c_p1:
-        fecha_hechos = st.date_input("📅 Fecha de consumación de los hechos", datetime.date.today())
-        pena_max_meses = st.number_input("⚖️ Pena Máxima del Delito (en meses)", min_value=1, value=108, step=12)
-        st.caption("Ejemplo: Si el delito tiene pena de 4 a 9 años, ingrese 108 meses.")
-        
-    with c_p2:
-        hubo_imputacion = st.checkbox("¿Se formuló imputación? (Interrupción del término - Art. 86)")
-        fecha_imputacion = None
-        if hubo_imputacion:
-            fecha_imputacion = st.date_input("📅 Fecha de Formulación de Imputación", datetime.date.today())
-            
-        es_servidor_publico = st.checkbox("El sujeto activo es Servidor Público (Aumenta el término prescriptivo)")
-        
-    if st.button("Ejecutar Algoritmo de Prescripción", type="primary", key="btn_presc"):
-        # 1. Regla General (Art. 83)
-        pena_anios = pena_max_meses / 12.0
-        termino_base_anios = max(5.0, min(20.0, pena_anios))
-        
-        if es_servidor_publico:
-            termino_base_anios = termino_base_anios * 1.5 # Aumento general promedio
-            
-        anios_base = int(termino_base_anios)
-        meses_base = int(round((termino_base_anios - anios_base) * 12))
-        
-        fecha_presc_inicial = fecha_hechos + relativedelta(years=anios_base, months=meses_base)
-        
-        if not hubo_imputacion:
-            st.warning("⚠️ **Fase de Indagación:** El término no ha sido interrumpido.")
-            st.write(f"**Término aplicable (Art. 83 CP):** {termino_base_anios:.2f} años.")
-            st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_inicial.strftime('%d/%m/%Y'))
-        else:
-            # 2. Interrupción por Imputación (Art. 86)
-            termino_interrumpido_anios = termino_base_anios / 2.0
-            termino_final_anios = max(3.0, min(10.0, termino_interrumpido_anios))
-            
-            anios_final = int(termino_final_anios)
-            meses_final = int(round((termino_final_anios - anios_final) * 12))
-            
-            fecha_presc_final = fecha_imputacion + relativedelta(years=anios_final, months=meses_final)
-            
-            st.error("🛑 **Fase de Investigación/Juicio:** Término interrumpido por imputación.")
-            st.write(f"**Nuevo término reducido (Art. 86 CP):** {termino_final_anios:.2f} años (Contados desde la imputación).")
-            st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_final.strftime('%d/%m/%Y'))
-
-# 1. CATÁLOGO DE DELITOS FRECUENTES (Pena Máxima en meses)
+    # 1. CATÁLOGO COMPLETO DE DELITOS (Pena Máxima en meses - Ley 599/2000 y modif.)
     catalogo_delitos = {
         # --- VIDA E INTEGRIDAD PERSONAL ---
         "Homicidio simple (Art. 103)": 450,
@@ -292,11 +247,9 @@ with tab2:
         "Feminicidio simple (Art. 104A)": 500,
         "Feminicidio agravado (Art. 104B)": 600,
         "Lesiones personales (Ej. Incapacidad > 90 días)": 120,
-        
         # --- LIBERTAD Y FORMACIÓN SEXUAL ---
         "Acceso carnal violento (Art. 205)": 360,
         "Actos sexuales con menor de 14 años (Art. 209)": 156,
-        
         # --- PATRIMONIO ECONÓMICO ---
         "Hurto simple (Art. 239)": 108,
         "Hurto calificado (Art. 240)": 168,
@@ -304,29 +257,24 @@ with tab2:
         "Estafa (Art. 246)": 144,
         "Abuso de confianza (Art. 249)": 54,
         "Extorsión (Art. 244)": 288,
-        
         # --- FAMILIA ---
         "Violencia intrafamiliar (Art. 229)": 96,
         "Inasistencia alimentaria (Art. 233)": 54,
-        
         # --- FE PÚBLICA ---
         "Falsedad ideológica en doc. público (Art. 286)": 144,
         "Falsedad material en doc. público (Art. 287)": 108,
         "Falsedad en documento privado (Art. 289)": 108,
-        
         # --- SEGURIDAD PÚBLICA ---
         "Concierto para delinquir simple (Art. 340)": 108,
         "Concierto para delinquir agravado (Art. 340 inc. 2)": 216,
         "Porte ilegal de armas de fuego (Art. 365)": 144,
         "Tráfico, fab. o porte de estupefacientes (Art. 376)": 360,
-        
         # --- ADMINISTRACIÓN PÚBLICA ---
         "Peculado por apropiación (Art. 397)": 270,
         "Concusión (Art. 404)": 180,
         "Cohecho propio (Art. 405)": 180,
         "Celebración indebida de contratos (Art. 410)": 216,
         "Prevaricato por acción (Art. 413)": 144,
-        
         # --- OTROS ---
         "Lavado de activos (Art. 323)": 360,
         "Secuestro extorsivo (Art. 169)": 504,
@@ -337,11 +285,9 @@ with tab2:
     with c_p1:
         fecha_hechos = st.date_input("📅 Fecha de consumación de los hechos", datetime.date.today())
         
-        # NUEVO: Menú desplegable inteligente
         delito_seleccionado = st.selectbox("⚖️ Seleccione el Delito", list(catalogo_delitos.keys()))
         
-        # Lógica para mostrar el campo manual solo si elige "OTRO"
-        if delito_seleccionado == "OTRO (Ingreso manual)":
+        if delito_seleccionado == "OTRO (Ingreso manual / Concurso de delitos)":
             pena_max_meses = st.number_input("Ingrese la pena máxima en meses", min_value=1, value=108, step=1)
         else:
             pena_max_meses = catalogo_delitos[delito_seleccionado]
@@ -361,7 +307,7 @@ with tab2:
         termino_base_anios = max(5.0, min(20.0, pena_anios))
         
         if es_servidor_publico:
-            termino_base_anios = termino_base_anios * 1.5 # Aumento
+            termino_base_anios = termino_base_anios * 1.5 # Aumento general promedio
             
         anios_base = int(termino_base_anios)
         meses_base = int(round((termino_base_anios - anios_base) * 12))
