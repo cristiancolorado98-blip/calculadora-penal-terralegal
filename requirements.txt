@@ -1,3 +1,4 @@
 streamlit
 holidays
 fpdf2
+supabase
