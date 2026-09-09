@@ -1,10 +1,11 @@
 import streamlit as st
 import datetime
+from dateutil.relativedelta import relativedelta
 import holidays
 from fpdf import FPDF
 
 # ==========================================
-# 1. MOTOR DE CÁLCULO
+# 1. MOTOR DE CÁLCULO (DÍAS HÁBILES)
 # ==========================================
 def es_vacancia_judicial(fecha):
     if (fecha.month == 12 and fecha.day >= 20) or (fecha.month == 1 and fecha.day <= 10):
@@ -34,27 +35,17 @@ def calcular_vencimiento(fecha_inicio, dias_plazo, tipo_conteo="habil"):
 # ==========================================
 def generar_ics(tramite, fecha_vencimiento, base_legal):
     fecha_str = fecha_vencimiento.strftime("%Y%m%d")
-    ics_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-SUMMARY:Vencimiento: {tramite}
-DTSTART;VALUE=DATE:{fecha_str}
-DTEND;VALUE=DATE:{fecha_str}
-DESCRIPTION:Vencimiento de términos procesales.\\nBase Legal: {base_legal}\\n\\nGenerado por Terralegal S.A.S.
-END:VEVENT
-END:VCALENDAR"""
+    ics_content = f"BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:Vencimiento: {tramite}\nDTSTART;VALUE=DATE:{fecha_str}\nDTEND;VALUE=DATE:{fecha_str}\nDESCRIPTION:Vencimiento procesal.\\nBase Legal: {base_legal}\\n\\nGenerado por Terralegal S.A.S.\nEND:VEVENT\nEND:VCALENDAR"
     return ics_content
 
 def generar_pdf(tramite, base_legal, dias, tipo_conteo, fecha_notif, fecha_venc, rango=False, fecha_max=None):
     pdf = FPDF()
     pdf.add_page()
-    
     pdf.set_font("helvetica", "B", 16)
     pdf.cell(0, 10, "REPORTE DE VENCIMIENTO DE TERMINOS", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font("helvetica", "I", 10)
     pdf.cell(0, 10, "Generado por Terralegal S.A.S.", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(10)
-    
     pdf.set_font("helvetica", "", 12)
     pdf.cell(0, 8, f"Actuacion Procesal: {tramite.encode('latin-1', 'replace').decode('latin-1')}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Fundamento Juridico: {base_legal}", new_x="LMARGIN", new_y="NEXT")
@@ -71,30 +62,22 @@ def generar_pdf(tramite, base_legal, dias, tipo_conteo, fecha_notif, fecha_venc,
         pdf.ln(5)
         pdf.set_font("helvetica", "B", 14)
         pdf.cell(0, 10, f"FECHA EXACTA DE VENCIMIENTO: {fecha_venc.strftime('%d/%m/%Y')}", new_x="LMARGIN", new_y="NEXT")
-    
     return bytes(pdf.output())
 
 # ==========================================
-# 3. DICCIONARIOS DE TÉRMINOS (ACTUALIZADOS Y COMPLETOS)
+# 3. DICCIONARIOS DE TÉRMINOS
 # ==========================================
 terminos_ordinarios = {
-    # --- RECURSOS ORDINARIOS Y EXTRAORDINARIOS ---
     "Apelación de Autos (Sustentación)": {"dias": 5, "tipo_conteo": "habil", "base_legal": "Art. 177 CPP", "duplicable": False},
     "Apelación de Sentencias (Sustentación)": {"dias": 5, "tipo_conteo": "habil", "base_legal": "Art. 179 CPP", "duplicable": False},
     "Presentación Demanda de Casación": {"dias": 30, "tipo_conteo": "habil", "base_legal": "Art. 183 CPP", "duplicable": False},
-    
-    # --- FASE DE INVESTIGACIÓN Y JUZGAMIENTO ---
     "Presentación Escrito Acusación": {"dias": 60, "tipo_conteo": "calendario", "base_legal": "Art. 175 CPP", "duplicable": True},
     "Fijación Audiencia de Acusación": {"dias": 3, "tipo_conteo": "habil", "base_legal": "Art. 338 CPP", "duplicable": False},
     "Fijación Audiencia Preparatoria": {"dias_min": 15, "dias_max": 30, "tipo_conteo": "habil", "base_legal": "Art. 343 CPP", "duplicable": False},
     "Fijación Inicio Juicio Oral": {"dias_min": 15, "dias_max": 30, "tipo_conteo": "habil", "base_legal": "Art. 365 CPP", "duplicable": False},
     "Emisión Sentencia (Desde sentido de fallo)": {"dias": 15, "tipo_conteo": "habil", "base_legal": "Art. 446 CPP", "duplicable": False},
-
-    # --- INCIDENTE DE REPARACIÓN INTEGRAL (IRI) ---
-    "Solicitud de Incidente (Desde firmeza sentencia)": {"dias": 30, "tipo_conteo": "habil", "base_legal": "Art. 106 CPP", "duplicable": False},
+    "Solicitud de Incidente de Reparación": {"dias": 30, "tipo_conteo": "habil", "base_legal": "Art. 106 CPP", "duplicable": False},
     "Audiencia de Reparación (Desde aceptación)": {"dias_min": 8, "dias_max": 15, "tipo_conteo": "habil", "base_legal": "Art. 103 CPP", "duplicable": False},
-
-    # --- VENCIMIENTO DE TÉRMINOS (LIBERTAD - ART 317) ---
     "Libertad: Imputación a Acusación": {"dias": 60, "tipo_conteo": "calendario", "base_legal": "Art. 317 Num. 4 CPP", "duplicable": True},
     "Libertad: Acusación a Juicio Oral": {"dias": 120, "tipo_conteo": "calendario", "base_legal": "Art. 317 Num. 5 CPP", "duplicable": True},
     "Libertad: Juicio Oral a Sentencia": {"dias": 150, "tipo_conteo": "calendario", "base_legal": "Art. 317 Num. 6 CPP", "duplicable": True}
@@ -110,67 +93,115 @@ terminos_abreviados = {
 }
 
 # ==========================================
-# 4. INTERFAZ GRÁFICA (STREAMLIT)
+# 4. INTERFAZ GRÁFICA (FRONTEND COMPLETO)
 # ==========================================
-st.set_page_config(page_title="Calculadora Penal", page_icon="⚖️", layout="centered")
+st.set_page_config(page_title="Plataforma LegalTech - Terralegal", page_icon="⚖️", layout="wide")
 
-st.title("⚖️ Calculadora de Términos Penales")
-st.markdown("Cómputo automatizado de plazos procesales para litigio estratégico.")
+st.title("⚖️ Terralegal S.A.S - Gestor Procesal Automático")
+st.markdown("Plataforma avanzada para el control de términos y prescripción de la acción penal.")
 st.divider()
 
-regimen = st.radio("📜 Seleccione el Régimen Procesal:", 
-                   ["Procedimiento Ordinario (Ley 906)", "Procedimiento Abreviado (Ley 1826)"], 
-                   horizontal=True)
+# CREAMOS LAS DOS PESTAÑAS
+tab1, tab2 = st.tabs(["📅 Cómputo de Términos (Ley 906/1826)", "⏳ Cálculo de Prescripción (Ley 599) - NUEVO"])
 
-terminos_activos = terminos_ordinarios if "906" in regimen else terminos_abreviados
+# --- PESTAÑA 1: CÓMPUTO DE TÉRMINOS ---
+with tab1:
+    regimen = st.radio("📜 Seleccione el Régimen Procesal:", 
+                       ["Procedimiento Ordinario (Ley 906)", "Procedimiento Abreviado (Ley 1826)"], 
+                       horizontal=True)
+    terminos_activos = terminos_ordinarios if "906" in regimen else terminos_abreviados
 
-col1, col2 = st.columns(2)
-with col1:
-    fecha_notificacion = st.date_input("📅 Fecha del acto o notificación", datetime.date.today())
-with col2:
-    opcion_tramite = st.selectbox("📂 Seleccione la actuación procesal", list(terminos_activos.keys()))
+    col1, col2 = st.columns(2)
+    with col1:
+        fecha_notificacion = st.date_input("📅 Fecha del acto o notificación", datetime.date.today())
+    with col2:
+        opcion_tramite = st.selectbox("📂 Seleccione la actuación procesal", list(terminos_activos.keys()))
 
-st.divider()
-es_especializada = st.checkbox("Activar: Justicia Especializada, GDO o Pluralidad de Imputados (Duplica términos)")
-st.divider()
-
-if st.button("Calcular Vencimiento", type="primary"):
-    tramite = terminos_activos[opcion_tramite]
+    st.divider()
+    es_especializada = st.checkbox("Activar: Justicia Especializada, GDO o Pluralidad de Imputados (Duplica términos)")
     
-    # --- LÓGICA PARA PLAZOS FIJOS ---
-    if "dias" in tramite:
-        dias_calc = tramite["dias"] * 2 if (es_especializada and tramite["duplicable"]) else tramite["dias"]
-        fecha_vencimiento = calcular_vencimiento(fecha_notificacion, dias_calc, tramite["tipo_conteo"])
-        
-        st.success("Cálculo realizado con éxito")
-        st.metric(label="Fecha Exacta de Vencimiento", value=fecha_vencimiento.strftime('%d/%m/%Y'))
-        st.write(f"**Término Aplicado:** {dias_calc} días {tramite['tipo_conteo']}s. | **Base Legal:** {tramite['base_legal']}")
-        
-        st.markdown("### 💾 Guardar Resultados")
-        b_col1, b_col2 = st.columns(2)
-        with b_col1:
-            pdf_bytes = generar_pdf(opcion_tramite, tramite['base_legal'], dias_calc, tramite['tipo_conteo'], fecha_notificacion, fecha_vencimiento)
-            st.download_button(label="📄 Descargar en PDF", data=pdf_bytes, file_name=f"Vencimiento_{opcion_tramite}.pdf", mime="application/pdf")
-        with b_col2:
-            ics_str = generar_ics(opcion_tramite, fecha_vencimiento, tramite['base_legal'])
-            st.download_button(label="📅 Agregar al Calendario", data=ics_str, file_name="vencimiento.ics", mime="text/calendar")
+    if st.button("Calcular Vencimiento", type="primary", key="btn_terminos"):
+        tramite = terminos_activos[opcion_tramite]
+        if "dias" in tramite:
+            dias_calc = tramite["dias"] * 2 if (es_especializada and tramite["duplicable"]) else tramite["dias"]
+            fecha_vencimiento = calcular_vencimiento(fecha_notificacion, dias_calc, tramite["tipo_conteo"])
+            
+            st.success("Cálculo realizado con éxito")
+            st.metric(label="Fecha Exacta de Vencimiento", value=fecha_vencimiento.strftime('%d/%m/%Y'))
+            st.write(f"**Término Aplicado:** {dias_calc} días {tramite['tipo_conteo']}s. | **Base Legal:** {tramite['base_legal']}")
+            
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
+                pdf_bytes = generar_pdf(opcion_tramite, tramite['base_legal'], dias_calc, tramite['tipo_conteo'], fecha_notificacion, fecha_vencimiento)
+                st.download_button(label="📄 Descargar en PDF", data=pdf_bytes, file_name=f"Vencimiento_{opcion_tramite}.pdf", mime="application/pdf")
+            with b_col2:
+                ics_str = generar_ics(opcion_tramite, fecha_vencimiento, tramite['base_legal'])
+                st.download_button(label="📅 Agregar al Calendario", data=ics_str, file_name="vencimiento.ics", mime="text/calendar")
 
-    # --- LÓGICA PARA RANGOS ---
-    elif "dias_min" in tramite:
-        fecha_min = calcular_vencimiento(fecha_notificacion, tramite["dias_min"], tramite["tipo_conteo"])
-        fecha_max = calcular_vencimiento(fecha_notificacion, tramite["dias_max"], tramite["tipo_conteo"])
+        elif "dias_min" in tramite:
+            fecha_min = calcular_vencimiento(fecha_notificacion, tramite["dias_min"], tramite["tipo_conteo"])
+            fecha_max = calcular_vencimiento(fecha_notificacion, tramite["dias_max"], tramite["tipo_conteo"])
+            
+            st.success("Cálculo de rango realizado con éxito")
+            c1, c2 = st.columns(2)
+            c1.metric(label="Vencimiento Mínimo", value=fecha_min.strftime('%d/%m/%Y'))
+            c2.metric(label="Vencimiento Máximo", value=fecha_max.strftime('%d/%m/%Y'))
+            
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
+                texto_rango = f"{tramite['dias_min']} a {tramite['dias_max']} días {tramite['tipo_conteo']}s"
+                pdf_bytes = generar_pdf(opcion_tramite, tramite['base_legal'], tramite['dias_min'], texto_rango, fecha_notificacion, fecha_min, rango=True, fecha_max=fecha_max)
+                st.download_button(label="📄 Descargar en PDF", data=pdf_bytes, file_name="Vencimiento_Rango.pdf", mime="application/pdf")
+            with b_col2:
+                ics_str = generar_ics(opcion_tramite + " (Límite Máximo)", fecha_max, tramite['base_legal'])
+                st.download_button(label="📅 Agregar al Calendario (Límite)", data=ics_str, file_name="vencimiento.ics", mime="text/calendar")
+
+# --- PESTAÑA 2: CÁLCULO DE PRESCRIPCIÓN ---
+with tab2:
+    st.markdown("### Algoritmo de Prescripción de la Acción Penal")
+    st.info("💡 Este módulo calcula los tiempos de caducidad aplicando las reglas de los artículos 83 y 86 del Código Penal.")
+    
+    c_p1, c_p2 = st.columns(2)
+    with c_p1:
+        fecha_hechos = st.date_input("📅 Fecha de consumación de los hechos", datetime.date.today())
+        pena_max_meses = st.number_input("⚖️ Pena Máxima del Delito (en meses)", min_value=1, value=108, step=12)
+        st.caption("Ejemplo: Si el delito tiene pena de 4 a 9 años, ingrese 108 meses.")
         
-        st.success("Cálculo de rango realizado con éxito")
-        c1, c2 = st.columns(2)
-        c1.metric(label="Vencimiento Mínimo", value=fecha_min.strftime('%d/%m/%Y'))
-        c2.metric(label="Vencimiento Máximo", value=fecha_max.strftime('%d/%m/%Y'))
+    with c_p2:
+        hubo_imputacion = st.checkbox("¿Se formuló imputación? (Interrupción del término - Art. 86)")
+        fecha_imputacion = None
+        if hubo_imputacion:
+            fecha_imputacion = st.date_input("📅 Fecha de Formulación de Imputación", datetime.date.today())
+            
+        es_servidor_publico = st.checkbox("El sujeto activo es Servidor Público (Aumenta el término prescriptivo)")
         
-        st.markdown("### 💾 Guardar Resultados")
-        b_col1, b_col2 = st.columns(2)
-        with b_col1:
-            texto_rango = f"{tramite['dias_min']} a {tramite['dias_max']} días {tramite['tipo_conteo']}s"
-            pdf_bytes = generar_pdf(opcion_tramite, tramite['base_legal'], tramite['dias_min'], texto_rango, fecha_notificacion, fecha_min, rango=True, fecha_max=fecha_max)
-            st.download_button(label="📄 Descargar en PDF", data=pdf_bytes, file_name="Vencimiento_Rango.pdf", mime="application/pdf")
-        with b_col2:
-            ics_str = generar_ics(opcion_tramite + " (Límite Máximo)", fecha_max, tramite['base_legal'])
-            st.download_button(label="📅 Agregar al Calendario (Límite)", data=ics_str, file_name="vencimiento.ics", mime="text/calendar")
+    if st.button("Ejecutar Algoritmo de Prescripción", type="primary", key="btn_presc"):
+        # 1. Regla General (Art. 83)
+        pena_anios = pena_max_meses / 12.0
+        termino_base_anios = max(5.0, min(20.0, pena_anios))
+        
+        if es_servidor_publico:
+            termino_base_anios = termino_base_anios * 1.5 # Aumento general promedio
+            
+        anios_base = int(termino_base_anios)
+        meses_base = int(round((termino_base_anios - anios_base) * 12))
+        
+        fecha_presc_inicial = fecha_hechos + relativedelta(years=anios_base, months=meses_base)
+        
+        if not hubo_imputacion:
+            st.warning("⚠️ **Fase de Indagación:** El término no ha sido interrumpido.")
+            st.write(f"**Término aplicable (Art. 83 CP):** {termino_base_anios:.2f} años.")
+            st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_inicial.strftime('%d/%m/%Y'))
+        else:
+            # 2. Interrupción por Imputación (Art. 86)
+            termino_interrumpido_anios = termino_base_anios / 2.0
+            termino_final_anios = max(3.0, min(10.0, termino_interrumpido_anios))
+            
+            anios_final = int(termino_final_anios)
+            meses_final = int(round((termino_final_anios - anios_final) * 12))
+            
+            fecha_presc_final = fecha_imputacion + relativedelta(years=anios_final, months=meses_final)
+            
+            st.error("🛑 **Fase de Investigación/Juicio:** Término interrumpido por imputación.")
+            st.write(f"**Nuevo término reducido (Art. 86 CP):** {termino_final_anios:.2f} años (Contados desde la imputación).")
+            st.metric(label="Fecha Exacta de Prescripción", value=fecha_presc_final.strftime('%d/%m/%Y'))
