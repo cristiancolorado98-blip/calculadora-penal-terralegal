@@ -4,6 +4,7 @@ from dateutil.relativedelta import relativedelta
 import holidays
 from fpdf import FPDF
 from supabase import create_client, Client
+import pandas as pd
 
 # ==========================================
 # 0. CONEXIÓN A LA BASE DE DATOS (SUPABASE)
@@ -341,13 +342,12 @@ with tab3:
     st.markdown("### 🗄️ Archivo Digital de Expedientes")
     st.info("Guarda los resultados directamente en la base de datos cifrada de Terralegal.")
     
+    # 1. FORMULARIO DE INGRESO
     with st.form("formulario_nuevo_caso", clear_on_submit=True):
         col_form1, col_form2 = st.columns(2)
-        
         with col_form1:
             radicado_input = st.text_input("Número de Radicado (21 dígitos)")
             delito_input = st.text_input("Delito Investigado")
-            
         with col_form2:
             actuacion_input = st.text_input("Actuación Procesal Pendiente")
             fecha_venc_input = st.date_input("Fecha de Vencimiento Estimada")
@@ -365,11 +365,36 @@ with tab3:
                         "actuacion_pendiente": actuacion_input,
                         "fecha_vencimiento": fecha_venc_input.isoformat()
                     }
-                    
-                    respuesta = supabase.table("casos_penales").insert(datos_caso).execute()
-                    
+                    supabase.table("casos_penales").insert(datos_caso).execute()
                     st.success(f"¡Caso {radicado_input} guardado exitosamente en la base de datos!")
                 except Exception as e:
                     st.error(f"Hubo un error al guardar: {e}")
             else:
                 st.warning("⚠️ Debes llenar al menos el radicado y el delito.")
+
+    st.divider()
+
+    # 2. NUEVO: TABLERO DE CONTROL (DASHBOARD)
+    st.markdown("### 📊 Tablero de Control Activo")
+    
+    try:
+        # Descargamos los datos desde Supabase
+        respuesta_db = supabase.table("casos_penales").select("*").execute()
+        datos_db = respuesta_db.data
+        
+        if datos_db:
+            # Convertimos la información en una tabla inteligente de Pandas
+            df = pd.DataFrame(datos_db)
+            
+            # Filtramos solo las columnas que importan y las ordenamos
+            df = df[["radicado", "delito", "actuacion_pendiente", "fecha_vencimiento", "usuario_email"]]
+            # Les ponemos nombres bonitos para la presentación visual
+            df.columns = ["Radicado", "Delito", "Actuación Pendiente", "Vencimiento", "Abogado Asignado"]
+            
+            # Mostramos la tabla en Streamlit (ocultando el índice numérico por defecto)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Aún no hay expedientes registrados en la plataforma.")
+            
+    except Exception as e:
+        st.error(f"Ocurrió un error al cargar el tablero de control: {e}")
