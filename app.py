@@ -25,33 +25,6 @@ supabase = iniciar_conexion()
 # (AQUÍ DEBES DEJAR TODO TU MOTOR DE CÁLCULO Y FUNCIONES DE PDF/FESTIVOS IGUAL)
 # ...
 
-# ==========================================
-# 4. INTERFAZ GRÁFICA (FRONTEND COMPLETO)
-# ==========================================
-st.set_page_config(page_title="Plataforma LegalTech - Terralegal", page_icon="⚖️", layout="wide")
-
-# 1.5 INYECCIÓN DE CSS (DISEÑO PREMIUM)
-ocultar_elementos_streamlit = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            /* Ajuste de márgenes para que se vea más centrado y elegante */
-            .block-container {
-                padding-top: 2rem;
-                padding-bottom: 0rem;
-            }
-            </style>
-            """
-st.markdown(ocultar_elementos_streamlit, unsafe_allow_html=True)
-
-st.title("⚖️ Terralegal S.A.S - Gestor Procesal Automático")
-st.divider()
-
-# AHORA TENEMOS 3 PESTAÑAS
-tab1, tab2, tab3 = st.tabs(["📅 Cómputo", "⏳ Prescripción", "📂 GESTOR DE CASOS (NUEVO)"])
-
-# (AQUÍ DEJAS EL CONTENIDO DE TAB1 y TAB2 EXACTAMENTE IGUAL)
 # ...
 
 # --- PESTAÑA 3: GESTOR DE CASOS CON BASE DE DATOS ---
@@ -190,6 +163,21 @@ terminos_abreviados = {
 # ==========================================
 st.set_page_config(page_title="Plataforma LegalTech - Terralegal", page_icon="logo.png", layout="wide")
 
+# 1.5 INYECCIÓN DE CSS (DISEÑO PREMIUM)
+ocultar_elementos_streamlit = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            /* Ajuste de márgenes para que se vea más centrado y elegante */
+            .block-container {
+                padding-top: 2rem;
+                padding-bottom: 0rem;
+            }
+            </style>
+            """
+st.markdown(ocultar_elementos_streamlit, unsafe_allow_html=True)
+
 # 1. ENCABEZADO UNIFICADO Y LIMPIO
 st.image("logo.png", width=300) 
 st.title("Gestor Procesal Automático")
@@ -204,6 +192,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # --- PESTAÑA 1: CÓMPUTO DE TÉRMINOS ---
+
 with tab1:
     regimen = st.radio("📜 Seleccione el Régimen Procesal:", 
                        ["Procedimiento Ordinario (Ley 906)", "Procedimiento Abreviado (Ley 1826)"], 
