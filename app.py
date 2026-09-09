@@ -173,19 +173,20 @@ terminos_abreviados = {
 # ==========================================
 # 4. INTERFAZ GRÁFICA (FRONTEND COMPLETO)
 # ==========================================
-# 1. Cambiamos el icono de la pestaña por tu logo
 st.set_page_config(page_title="Plataforma LegalTech - Terralegal", page_icon="logo.png", layout="wide")
 
-# 2. Mostramos el logo oficial en la aplicación
+# 1. ENCABEZADO UNIFICADO Y LIMPIO
 st.image("logo.png", width=300) 
 st.title("Gestor Procesal Automático")
-
-# ¡RESCATAMOS EL SUBTÍTULO!
 st.markdown("Plataforma avanzada para el control de términos y prescripción de la acción penal.")
 st.divider()
 
-# ¡RESCATAMOS LAS 3 PESTAÑAS! (Incluyendo la nueva base de datos)
-tab1, tab2, tab3 = st.tabs(["📅 Cómputo de Términos (Ley 906/1826)", "⏳ Cálculo de Prescripción (Ley 599)", "📂 GESTOR DE CASOS"])
+# 2. ÚNICA CREACIÓN DE PESTAÑAS (Aquí conectamos los 3 módulos)
+tab1, tab2, tab3 = st.tabs([
+    "📅 Cómputo de Términos (Ley 906/1826)", 
+    "⏳ Cálculo de Prescripción (Ley 599)", 
+    "📂 Gestor de Casos"
+])
 
 # --- PESTAÑA 1: CÓMPUTO DE TÉRMINOS ---
 with tab1:
